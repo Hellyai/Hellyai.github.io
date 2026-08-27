@@ -1,0 +1,49 @@
+{
+  "heroTitleBefore": "把法律判断，写成",
+  "heroHighlight": "可以运行",
+  "heroTitleAfter": "的方法。",
+  "heroIntro": "我把交易文件审阅、股权结构计算和基金条款研究，整理成可以调用、检查和持续迭代的 AI 工具。这里记录的不仅仅是工具清单，也包括方法如何被做成作品。",
+  "portraitUrl": "/images/home/portrait-1787735026151.png",
+  "portraitAlt": "戴眼镜、手持铅笔和写字板的个人插画形象",
+  "portraitTags": [
+    "投后管理",
+    "投融资交易",
+    "AI工作流"
+  ],
+  "methodTitle": "做自己的AI产品经理",
+  "methodIntro": "AI 进入法律工作之前，先把任务变成有边界、有结构、有复核点的流程。",
+  "methodSteps": [
+    {
+      "label": "READ / 读材料",
+      "description": "先确认文件、交易角色与事实边界，不让模型用想象填补缺口。"
+    },
+    {
+      "label": "WBS / 拆解任务",
+      "description": "把任务重新拆解组织，让问题之间的连接显现出来，将日常工作的SOP予以沉淀，交给AI反复使用。"
+    },
+    {
+      "label": "CHECK / 做复核",
+      "description": "保留计算口径、来源和待核实事项，让结果可以被专业人士接管。"
+    }
+  ],
+  "coreQuote": "关心的不是 AI 能写多少，而是它的输出能否准确、稳定并符合个人习惯。",
+  "repositories": [
+    {
+      "name": "transaction-legal-skills-/",
+      "url": "https://github.com/Hellyai/transaction-legal-skills-",
+      "description": "审阅路由 · 权利清单 · 质量控制 · 计算脚本"
+    },
+    {
+      "name": "cap-table-skill/",
+      "url": "https://github.com/Hellyai/cap-table-skill",
+      "description": "交易拆分 · 反摊薄口径 · 多轮计算 · 勾稽复核"
+    },
+    {
+      "name": "lpa-clause-map/",
+      "url": "https://github.com/Hellyai/lpa-clause-map",
+      "description": "38 个篇章 · 搜索筛选 · 法规交叉 · 本地批注"
+    }
+  ],
+  "closingTitle": "工作完成以后，把方法留下来。",
+  "closingText": "这个工作台会继续收录真实项目、判断过程和可以复用的法律 AI 工作流。"
+}
