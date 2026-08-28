@@ -32,8 +32,9 @@ if ($LASTEXITCODE -eq 1) {
   throw 'Unable to inspect staged changes.'
 }
 
-$existingOrigin = (& git -C $workbenchRoot remote get-url origin 2>$null)
-if ($LASTEXITCODE -eq 0) {
+$remotes = @(& git -C $workbenchRoot remote)
+if ($remotes -contains 'origin') {
+  $existingOrigin = (& git -C $workbenchRoot remote get-url origin)
   if ($existingOrigin.Trim() -ne $RepositoryUrl) {
     throw "The current origin points to $existingOrigin. Confirm it before changing the remote repository."
   }
