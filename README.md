@@ -39,6 +39,4 @@ npm.cmd run docs:dev
 
 如果后台提示“GitHub 仓库尚未连接”或“自动同步失败”，内容仍已安全保存在本机，可完成 GitHub 登录或网络检查后重新保存一次。
 
-## 设计署名与许可
 
-本项目使用并改编 ESTHER不二（esthersjw）的 Personal Design Skill 方法与模板体系，原设计系统采用 CC BY-NC-SA 4.0，要求署名、禁止商用、修改后以相同许可分享。
