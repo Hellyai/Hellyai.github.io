@@ -20,9 +20,57 @@ const sections = {
 type SectionKey = keyof typeof sections
 type UploadImage = { name: string; type: string; data: string }
 type GitSyncResult = { status: 'synced' | 'skipped' | 'failed'; message: string }
+type GitRepositoryStatus = {
+  available: boolean; connected: boolean; branch: string; ahead: number; behind: number; dirty: boolean
+  state: 'synced' | 'ahead' | 'behind' | 'diverged' | 'unavailable'; message: string
+}
 
 async function runGit(args: string[]) {
   return execFileAsync('git', args, { cwd: projectRoot, windowsHide: true, timeout: 60_000 })
+}
+const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+function gitErrorDetail(error: unknown) {
+  if (!error || typeof error !== 'object') return '未知错误'
+  const stderr = 'stderr' in error ? String(error.stderr ?? '').trim() : ''
+  const message = error instanceof Error ? error.message.trim() : ''
+  return (stderr || message || '未知错误').split(/\r?\n/)[0]
+}
+function isTransientGitError(error: unknown) {
+  return /connect|connection|recv failure|reset|timed?\s*out|resolve host|network|ssl|tls|http\/2/i.test(gitErrorDetail(error))
+}
+async function pushWithRetry(branch: string, attempts = 3) {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try { return await runGit(['push', 'origin', branch]) }
+    catch (error) {
+      lastError = error
+      if (attempt === attempts || !isTransientGitError(error)) throw error
+      await delay(attempt * 900)
+    }
+  }
+  throw lastError
+}
+async function getGitStatus(): Promise<GitRepositoryStatus> {
+  try {
+    await runGit(['rev-parse', '--is-inside-work-tree'])
+    const branch = (await runGit(['branch', '--show-current'])).stdout.trim() || 'main'
+    const dirty = Boolean((await runGit(['status', '--porcelain'])).stdout.trim())
+    try { await runGit(['remote', 'get-url', 'origin']) }
+    catch { return { available: true, connected: false, branch, ahead: 0, behind: 0, dirty, state: 'unavailable', message: '尚未连接 GitHub 仓库。' } }
+    let ahead = 0; let behind = 0
+    try {
+      const counts = (await runGit(['rev-list', '--left-right', '--count', `${branch}...origin/${branch}`])).stdout.trim().split(/\s+/).map(Number)
+      ahead = Number.isFinite(counts[0]) ? counts[0] : 0; behind = Number.isFinite(counts[1]) ? counts[1] : 0
+    } catch { /* 首次推送前可能还没有远端跟踪分支。 */ }
+    const state = ahead && behind ? 'diverged' : ahead ? 'ahead' : behind ? 'behind' : 'synced'
+    const message = state === 'diverged' ? `本地领先 ${ahead} 个版本，同时落后 ${behind} 个版本。`
+      : state === 'ahead' ? `有 ${ahead} 个本地版本等待同步。`
+        : state === 'behind' ? `GitHub 上有 ${behind} 个较新版本。`
+          : dirty ? '有尚未通过后台保存的本地文件变化。' : '本地与 GitHub 已同步。'
+    return { available: true, connected: true, branch, ahead, behind, dirty, state, message }
+  } catch {
+    return { available: false, connected: false, branch: '', ahead: 0, behind: 0, dirty: false, state: 'unavailable', message: '当前目录尚未初始化 Git。' }
+  }
 }
 async function syncToGitHub(commitMessage: string, absolutePaths: string[]): Promise<GitSyncResult> {
   try {
@@ -38,19 +86,29 @@ async function syncToGitHub(commitMessage: string, absolutePaths: string[]): Pro
   try {
     const paths = [...new Set(absolutePaths.map((file) => path.relative(projectRoot, file).replace(/\\/g, '/')))]
     await runGit(['add', '-A', '--', ...paths])
+    let committed = false
     try {
       await runGit(['diff', '--cached', '--quiet'])
-      return { status: 'skipped', message: '内容没有产生新的 Git 变更。' }
     } catch (error) {
       if (!error || typeof error !== 'object' || !('code' in error) || Number(error.code) !== 1) throw error
+      await runGit(['commit', '-m', commitMessage]); committed = true
     }
-    await runGit(['commit', '-m', commitMessage])
     const branch = (await runGit(['branch', '--show-current'])).stdout.trim() || 'main'
-    await runGit(['push', 'origin', branch])
-    return { status: 'synced', message: '已自动同步到 GitHub，公开网站将自动更新。' }
+    await pushWithRetry(branch)
+    return { status: 'synced', message: committed ? '已自动同步到 GitHub，公开网站将自动更新。' : '积压版本已同步，GitHub 当前是最新状态。' }
   } catch (error) {
-    const detail = error instanceof Error ? error.message.split(/\r?\n/)[0] : '未知错误'
+    const detail = gitErrorDetail(error)
     return { status: 'failed', message: `内容已保存在本机，但 GitHub 自动同步失败：${detail}` }
+  }
+}
+async function syncPendingToGitHub(): Promise<GitSyncResult> {
+  try {
+    await runGit(['rev-parse', '--is-inside-work-tree']); await runGit(['remote', 'get-url', 'origin'])
+    const branch = (await runGit(['branch', '--show-current'])).stdout.trim() || 'main'
+    await pushWithRetry(branch)
+    return { status: 'synced', message: '已同步到 GitHub，公开网站将自动更新。' }
+  } catch (error) {
+    return { status: 'failed', message: `同步失败：${gitErrorDetail(error)}` }
   }
 }
 function syncMessage(base: string, sync: GitSyncResult) {
@@ -205,7 +263,11 @@ function localContentMiddleware({ rebuildAfterSave }: { rebuildAfterSave: boolea
   return async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = new URL(req.url ?? '/', 'http://localhost'); if (!url.pathname.startsWith('/api/local-content')) return next(); if (!isLocalRequest(req)) return sendJson(res, 403, { error: '本机内容管理只允许从当前电脑访问。' })
     try {
-      if (url.pathname === '/api/local-content/status' && req.method === 'GET') return sendJson(res, 200, { available: true, mode: rebuildAfterSave ? 'preview' : 'development' })
+      if (url.pathname === '/api/local-content/status' && req.method === 'GET') return sendJson(res, 200, { available: true, mode: rebuildAfterSave ? 'preview' : 'development', git: await getGitStatus() })
+      if (url.pathname === '/api/local-content/sync' && req.method === 'POST') {
+        const sync = await syncPendingToGitHub(); const git = await getGitStatus()
+        return sendJson(res, sync.status === 'failed' ? 502 : 200, { gitSync: sync, git, message: sync.message })
+      }
       if (url.pathname === '/api/local-content/items' && req.method === 'GET') return sendJson(res, 200, { items: await listContent(url.searchParams) })
       if (url.pathname === '/api/local-content/item' && req.method === 'GET') return sendJson(res, 200, await getContent(url.searchParams.get('section'), url.searchParams.get('slug')))
       if (url.pathname === '/api/local-content/home' && req.method === 'GET') return sendJson(res, 200, await getHomeConfig())

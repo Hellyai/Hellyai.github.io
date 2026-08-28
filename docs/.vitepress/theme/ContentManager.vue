@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import HomeSettings from './HomeSettings.vue'
 
 type UploadFile = { file: File; preview: string }
 type ExistingImage = { name: string; url: string }
 type ContentItem = { section: string; sectionLabel: string; slug: string; title: string; summary: string; category: string; date: string }
+type GitStatus = { available: boolean; connected: boolean; branch: string; ahead: number; behind: number; dirty: boolean; state: 'synced' | 'ahead' | 'behind' | 'diverged' | 'unavailable'; message: string }
 
 const today = new Date().toISOString().slice(0, 10)
 const sections = [
@@ -40,12 +41,23 @@ const filterSection = ref('all')
 const deleteTarget = ref<ContentItem | null>(null)
 const deleteConfirmText = ref('')
 const deleting = ref(false)
+const gitStatus = ref<GitStatus | null>(null)
+const syncing = ref(false)
+let statusTimer: ReturnType<typeof setInterval> | undefined
 
 const tags = computed(() => tagsText.value.split(/[,，]/).map((item) => item.trim()).filter(Boolean).slice(0, 8))
 const movingSection = computed(() => editing.value && Boolean(editingOriginalSection.value) && section.value !== editingOriginalSection.value)
 const canSave = computed(() => apiAvailable.value && title.value.trim() && slug.value.trim() && summary.value.trim() && body.value.trim() && !saving.value && (!movingSection.value || moveConfirmed.value))
 const selectedSection = computed(() => sections.find((item) => item.value === section.value) ?? sections[0])
 const originalSectionLabel = computed(() => sections.find((item) => item.value === editingOriginalSection.value)?.label ?? '')
+const gitStatusTitle = computed(() => {
+  if (!gitStatus.value) return '正在读取同步状态'
+  if (!gitStatus.value.connected) return 'GitHub 尚未连接'
+  if (gitStatus.value.state === 'ahead') return `等待同步 · ${gitStatus.value.ahead} 个版本`
+  if (gitStatus.value.state === 'behind') return `GitHub 较新 · ${gitStatus.value.behind} 个版本`
+  if (gitStatus.value.state === 'diverged') return '本地与 GitHub 均有新版本'
+  return 'GitHub 已同步'
+})
 
 function makeSlug(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '')
@@ -69,10 +81,30 @@ async function checkApi() {
   try {
     const response = await fetch('/api/local-content/status', { cache: 'no-store' })
     apiAvailable.value = response.ok
-    if (response.ok) await loadItems()
+    if (response.ok) { const result = await response.json(); gitStatus.value = result.git ?? null; await loadItems() }
   } catch {
     apiAvailable.value = false
   }
+}
+
+async function loadGitStatus() {
+  if (!apiAvailable.value) return
+  try {
+    const response = await fetch('/api/local-content/status', { cache: 'no-store' }); const result = await response.json()
+    if (response.ok) gitStatus.value = result.git ?? null
+  } catch { /* 本机服务状态由主提示负责显示。 */ }
+}
+
+async function syncNow() {
+  if (syncing.value || !apiAvailable.value) return
+  syncing.value = true; status.value = { type: 'info', message: '正在连接 GitHub 并同步本地版本…' }
+  try {
+    const response = await fetch('/api/local-content/sync', { method: 'POST' }); const result = await response.json()
+    gitStatus.value = result.git ?? gitStatus.value
+    if (!response.ok) throw new Error(result.message || '同步失败，请稍后重试。')
+    status.value = { type: 'success', message: result.message }
+  } catch (error) { status.value = { type: 'error', message: error instanceof Error ? error.message : '同步失败，请稍后重试。' } }
+  finally { syncing.value = false; await loadGitStatus() }
 }
 
 async function loadItems() {
@@ -127,7 +159,7 @@ async function confirmDelete() {
   try {
     const response = await fetch('/api/local-content', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ section: deleteTarget.value.section, slug: deleteTarget.value.slug, confirmTitle: deleteConfirmText.value }) })
     const result = await response.json(); if (!response.ok) throw new Error(result.error || '删除失败。')
-    status.value = { type: 'success', message: result.message }; deleteTarget.value = null; deleteConfirmText.value = ''; await loadItems()
+    status.value = { type: 'success', message: result.message }; deleteTarget.value = null; deleteConfirmText.value = ''; await loadItems(); await loadGitStatus()
   } catch (error) { status.value = { type: 'error', message: error instanceof Error ? error.message : '删除失败。' } }
   finally { deleting.value = false }
 }
@@ -234,7 +266,7 @@ async function saveContent() {
     status.value = { type: 'success', message: result.message, url: result.url }
     if (!editing.value) sessionStorage.removeItem('local-content-draft')
     if (editing.value) { editingOriginalSection.value = section.value; moveConfirmed.value = false }
-    await loadItems()
+    await loadItems(); await loadGitStatus()
   } catch (error) {
     status.value = { type: 'error', message: error instanceof Error ? error.message : '保存失败，请稍后重试。' }
   } finally {
@@ -257,7 +289,9 @@ onMounted(async () => {
   } else if (params.get('view') === 'manage') {
     openManage()
   }
+  statusTimer = setInterval(loadGitStatus, 15_000)
 })
+onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
 </script>
 
 <template>
@@ -277,6 +311,16 @@ onMounted(async () => {
       <strong>当前页面只能阅读，暂时不能保存。</strong>
       <span>请在项目目录运行 <code>npm.cmd run docs:dev</code>，然后重新打开本页。</span>
     </div>
+
+    <section v-if="apiAvailable" class="sync-panel" :class="gitStatus?.state" aria-live="polite">
+      <div class="sync-mark" aria-hidden="true">↗</div>
+      <div class="sync-copy">
+        <span>GITHUB SYNC · {{ gitStatus?.branch || 'MAIN' }}</span>
+        <strong>{{ gitStatusTitle }}</strong>
+        <p>{{ gitStatus?.message || '正在检查本地与 GitHub 的版本。' }}</p>
+      </div>
+      <button type="button" :disabled="syncing || !gitStatus?.connected" @click="syncNow">{{ syncing ? '正在同步…' : '立即同步到 GitHub' }}</button>
+    </section>
 
     <nav class="manager-tabs" aria-label="内容管理方式">
       <button type="button" :class="{ active: view === 'create' }" @click="openCreate">新增内容</button>
@@ -407,7 +451,7 @@ onMounted(async () => {
         </div>
 
         <div class="save-bar">
-          <div><strong>内容只会保存到这台电脑</strong><span>遇到同名文件会停止保存，不会覆盖原内容。</span></div>
+          <div><strong>先安全保存到本机，再自动同步 GitHub</strong><span>网络失败时内容仍保留在本机，可使用上方“立即同步”重试。</span></div>
           <button type="submit" :disabled="!canSave">{{ saving ? '正在保存…' : editing ? '保存修改' : '保存并加入工作台' }}</button>
         </div>
       </form>
@@ -451,6 +495,18 @@ onMounted(async () => {
 .service-notice { max-width: 1216px; margin: 0 auto 24px; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-radius: 14px; background: #f7ddd0; color: #6e3024; }
 .service-notice span { font-size: .86rem; }
 .service-notice code { padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.5); }
+.sync-panel { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; max-width: 1216px; margin: 0 auto 22px; padding: 17px 19px; border: 1px solid rgba(49,95,86,.12); border-radius: 14px; background: rgba(255,253,248,.72); }
+.sync-panel.ahead, .sync-panel.diverged { border-color: rgba(232,173,66,.48); background: #fbf0d2; }
+.sync-panel.behind { border-color: rgba(53,82,101,.2); background: var(--manager-blue); }
+.sync-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: var(--manager-green); color: #f9f1e5; font-family: 'Noto Serif SC', serif; font-size: 1.15rem; font-weight: 900; }
+.sync-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sync-copy > span { color: var(--manager-green); font-size: .64rem; font-weight: 800; letter-spacing: .12em; }
+.sync-copy strong { font-family: 'Noto Serif SC', serif; font-size: .94rem; }
+.sync-copy p { margin: 0; color: var(--manager-muted); font-size: .74rem; }
+.sync-panel button { border: 0; border-radius: 9px; padding: 10px 14px; background: var(--manager-green); color: #f9f1e5; cursor: pointer; font: inherit; font-size: .78rem; font-weight: 800; transition: transform .18s ease, opacity .18s ease; }
+.sync-panel button:hover:not(:disabled) { transform: translateY(-2px); }
+.sync-panel button:focus-visible { outline: 3px solid rgba(232,173,66,.55); outline-offset: 3px; }
+.sync-panel button:disabled { cursor: not-allowed; opacity: .46; }
 .manager-tabs { display: flex; gap: 4px; max-width: 1216px; margin: 0 auto 28px; border-bottom: 2px solid rgba(49,95,86,.1); }
 .manager-tabs button { margin-bottom: -2px; border: 0; border-bottom: 2px solid transparent; padding: 12px 18px; background: transparent; color: var(--manager-muted); cursor: pointer; font: inherit; font-size: .88rem; font-weight: 700; }
 .manager-tabs button:hover { background: #eee6da; }
@@ -581,7 +637,7 @@ onMounted(async () => {
 .confirm-delete-button:disabled { cursor: not-allowed; opacity: .42; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 @media (max-width: 1040px) { .manager-layout { grid-template-columns: 1fr; } .preview-panel { order: -1; } .preview-sticky { position: static; } .paper-preview { min-height: 0; } }
-@media (max-width: 900px) { .manager-tabs, .content-library { margin-inline: 16px; } .library-toolbar { align-items: stretch; flex-direction: column; } .library-search { min-width: 0; } .content-list li { grid-template-columns: 1fr auto; } .content-meta { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; } }
-@media (max-width: 760px) { .manager-header { align-items: flex-start; flex-direction: column; } .manager-layout { padding-inline: 16px; } .section-picker { grid-template-columns: 1fr 1fr; } .section-option:last-child { grid-column: 1 / -1; } .field-grid { grid-template-columns: 1fr; } .field-wide { grid-column: auto; } .service-notice { margin-inline: 16px; align-items: flex-start; flex-direction: column; } .save-bar, .editing-banner, .move-notice { align-items: stretch; flex-direction: column; } .save-bar button { width: 100%; } .library-search { grid-template-columns: 1fr; } .content-list li { grid-template-columns: 1fr; } .content-meta, .content-actions { grid-column: auto; } .content-actions button { flex: 1; } }
+@media (max-width: 900px) { .manager-tabs, .content-library, .sync-panel { margin-inline: 16px; } .library-toolbar { align-items: stretch; flex-direction: column; } .library-search { min-width: 0; } .content-list li { grid-template-columns: 1fr auto; } .content-meta { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; } }
+@media (max-width: 760px) { .manager-header { align-items: flex-start; flex-direction: column; } .manager-layout { padding-inline: 16px; } .section-picker { grid-template-columns: 1fr 1fr; } .section-option:last-child { grid-column: 1 / -1; } .field-grid { grid-template-columns: 1fr; } .field-wide { grid-column: auto; } .service-notice { margin-inline: 16px; align-items: flex-start; flex-direction: column; } .sync-panel { grid-template-columns: auto 1fr; } .sync-panel button { grid-column: 1 / -1; width: 100%; } .save-bar, .editing-banner, .move-notice { align-items: stretch; flex-direction: column; } .save-bar button { width: 100%; } .library-search { grid-template-columns: 1fr; } .content-list li { grid-template-columns: 1fr; } .content-meta, .content-actions { grid-column: auto; } .content-actions button { flex: 1; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
 </style>
