@@ -25,6 +25,7 @@ if (-not (& git -C $workbenchRoot config --local user.name)) {
 if (-not (& git -C $workbenchRoot config --local user.email)) {
   Invoke-Git -GitArguments @('config', '--local', 'user.email', 'Hellyai@users.noreply.github.com')
 }
+Invoke-Git -GitArguments @('config', '--local', 'http.version', 'HTTP/1.1')
 
 Invoke-Git -GitArguments @('add', '-A')
 & git -C $workbenchRoot diff --cached --quiet
@@ -45,5 +46,7 @@ if ($remotes -contains 'origin') {
 }
 
 Invoke-Git -GitArguments @('branch', '-M', 'main')
+& git credential-manager github login --username Hellyai --device
+if ($LASTEXITCODE -ne 0) { throw 'GitHub device authentication failed or expired.' }
 Invoke-Git -GitArguments @('push', '-u', 'origin', 'main')
 Write-Host 'GitHub is connected. Future saves from the local admin page will be committed and pushed automatically.'
