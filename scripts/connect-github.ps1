@@ -5,6 +5,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $workbenchRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $workbenchRoot
+$env:GCM_PROVIDER = 'github'
+$env:GCM_GITHUB_AUTHMODES = 'device'
 
 function Invoke-Git {
   param([Parameter(Mandatory = $true)][string[]]$GitArguments)
