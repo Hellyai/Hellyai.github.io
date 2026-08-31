@@ -5,7 +5,7 @@ import HomeSettings from './HomeSettings.vue'
 type UploadFile = { file: File; preview: string }
 type ExistingImage = { name: string; url: string }
 type ContentItem = { section: string; sectionLabel: string; slug: string; title: string; summary: string; category: string; date: string }
-type GitStatus = { available: boolean; connected: boolean; branch: string; ahead: number; behind: number; dirty: boolean; state: 'synced' | 'ahead' | 'behind' | 'diverged' | 'unavailable'; message: string }
+type GitStatus = { available: boolean; connected: boolean; branch: string; ahead: number; behind: number; dirty: boolean; state: 'synced' | 'pending' | 'ahead' | 'behind' | 'diverged' | 'unavailable'; message: string }
 
 const today = new Date().toISOString().slice(0, 10)
 const sections = [
@@ -53,6 +53,7 @@ const originalSectionLabel = computed(() => sections.find((item) => item.value =
 const gitStatusTitle = computed(() => {
   if (!gitStatus.value) return '正在读取同步状态'
   if (!gitStatus.value.connected) return 'GitHub 尚未连接'
+  if (gitStatus.value.state === 'pending') return '本机内容等待同步'
   if (gitStatus.value.state === 'ahead') return `等待同步 · ${gitStatus.value.ahead} 个版本`
   if (gitStatus.value.state === 'behind') return `GitHub 较新 · ${gitStatus.value.behind} 个版本`
   if (gitStatus.value.state === 'diverged') return '本地与 GitHub 均有新版本'
@@ -496,7 +497,7 @@ onUnmounted(() => { if (statusTimer) clearInterval(statusTimer) })
 .service-notice span { font-size: .86rem; }
 .service-notice code { padding: 3px 7px; border-radius: 6px; background: rgba(255,255,255,.5); }
 .sync-panel { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; max-width: 1216px; margin: 0 auto 22px; padding: 17px 19px; border: 1px solid rgba(49,95,86,.12); border-radius: 14px; background: rgba(255,253,248,.72); }
-.sync-panel.ahead, .sync-panel.diverged { border-color: rgba(232,173,66,.48); background: #fbf0d2; }
+.sync-panel.pending, .sync-panel.ahead, .sync-panel.diverged { border-color: rgba(232,173,66,.48); background: #fbf0d2; }
 .sync-panel.behind { border-color: rgba(53,82,101,.2); background: var(--manager-blue); }
 .sync-mark { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: var(--manager-green); color: #f9f1e5; font-family: 'Noto Serif SC', serif; font-size: 1.15rem; font-weight: 900; }
 .sync-copy { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
