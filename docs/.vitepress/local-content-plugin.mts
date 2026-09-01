@@ -90,8 +90,15 @@ async function syncToGitHubNow(commitMessage: string, absolutePaths: string[]): 
     return { status: 'skipped', message: 'GitHub 仓库尚未连接，本次只保存在本机。' }
   }
   try {
-    const paths = [...new Set(absolutePaths.map((file) => path.relative(projectRoot, file).replace(/\\/g, '/')))]
-    await runGit(['add', '-A', '--', ...paths])
+    const candidates = [...new Map(absolutePaths.map((file) => {
+      const relative = path.relative(projectRoot, file).replace(/\\/g, '/')
+      return [relative, { absolute: file, relative }]
+    })).values()]
+    const paths: string[] = []
+    for (const candidate of candidates) {
+      if (fileExists(candidate.absolute) || (await runGit(['ls-files', '--', candidate.relative])).stdout.trim()) paths.push(candidate.relative)
+    }
+    if (paths.length) await runGit(['add', '-A', '--', ...paths])
     let committed = false
     try {
       await runGit(['diff', '--cached', '--quiet'])
