@@ -1,8 +1,0 @@
-node_modules
-docs/.vitepress/cache
-docs/.vitepress/dist
-.content-backups
-.qa
-preview-output.log
-preview-error.log
-.DS_Store
