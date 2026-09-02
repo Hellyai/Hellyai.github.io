@@ -11,10 +11,10 @@ const contentSections = [
   { key: 'skills', label: 'Skill 技能', description: '可重复执行的专业工作流', link: '/skills/' }
 ]
 
-const contentGroups = computed(() => contentSections.map((section) => ({
-  ...section,
-  items: homeContent.filter((item) => item.section === section.key).slice(0, 3)
-})))
+const contentGroups = computed(() => contentSections.map((section) => {
+  const items = homeContent.filter((item) => item.section === section.key)
+  return { ...section, count: items.length, items: items.slice(0, 3) }
+}))
 
 const workflowRows = [
   { step: '01', action: '识别任务', why: '文件类型、委托方身份和目标先明确' },
@@ -95,18 +95,34 @@ const workflowRows = [
         <header class="section-heading light-heading">
           <span class="section-num">03</span>
           <h2>作品结构</h2>
-          <p>每个仓库对应一种将专业知识外化的方法。</p>
+          <p>工作作品、Agent 指令与 Skill 技能保持联动，每次更新都会自动出现在这里。</p>
         </header>
-        <div class="repo-window">
-          <div class="repo-titlebar">
-            <span class="repo-dots"><i></i><i></i><i></i></span>
-            <span>github.com/Hellyai/</span>
+        <div class="structure-content">
+          <div class="structure-grid">
+            <section v-for="group in contentGroups" :key="group.key" class="structure-column">
+              <header>
+                <div><span>{{ String(group.count).padStart(2, '0') }}</span><h3>{{ group.label }}</h3></div>
+                <a :href="group.link" :aria-label="`查看全部${group.label}`">查看全部 →</a>
+              </header>
+              <ul v-if="group.items.length">
+                <li v-for="item in group.items.slice(0, 2)" :key="item.url">
+                  <a :href="item.url"><span>{{ item.category }}</span><strong>{{ item.title }}</strong></a>
+                </li>
+              </ul>
+              <p v-else class="structure-empty">尚未收录内容</p>
+            </section>
           </div>
-          <div class="repo-body">
-            <a v-for="repo in homeConfig.repositories" :key="repo.url" :href="repo.url" target="_blank" rel="noopener">
-              <strong>{{ repo.name }}</strong>
-              <span>{{ repo.description }}</span>
-            </a>
+          <div class="repo-window">
+            <div class="repo-titlebar">
+              <span class="repo-dots"><i></i><i></i><i></i></span>
+              <span>github.com/Hellyai/</span>
+            </div>
+            <div class="repo-body">
+              <a v-for="repo in homeConfig.repositories" :key="repo.url" :href="repo.url" target="_blank" rel="noopener">
+                <strong>{{ repo.name }}</strong>
+                <span>{{ repo.description }}</span>
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -140,6 +156,28 @@ const workflowRows = [
         </div>
       </div>
       <div class="closing-mark" aria-hidden="true">H</div>
+    </section>
+
+    <section class="about-section">
+      <div class="home-container about-layout">
+        <div class="about-portrait" aria-hidden="true">
+          <span>HELLO</span>
+          <div><img :src="homeConfig.portraitUrl" alt=""></div>
+        </div>
+        <div class="about-copy">
+          <span class="section-num">05</span>
+          <h2>{{ homeConfig.aboutTitle }}</h2>
+          <p class="about-lead">{{ homeConfig.aboutLead }}</p>
+          <p>{{ homeConfig.aboutText }}</p>
+          <div class="about-tags" aria-label="个人关键词">
+            <span v-for="tag in homeConfig.portraitTags" :key="tag">{{ tag }}</span>
+          </div>
+          <div class="helly-actions">
+            <a class="helly-primary" href="/work/">看看我在做什么 <span>→</span></a>
+            <a v-if="!isPublicSite" class="helly-secondary" href="/admin/?view=home">修改“我是谁”</a>
+          </div>
+        </div>
+      </div>
     </section>
 
     <footer class="helly-footer">
@@ -232,6 +270,24 @@ const workflowRows = [
 .light-heading h2 { margin: 8px 0 14px; }
 .light-heading p { color: #b8c4bf; line-height: 1.8; }
 .light-heading .section-num { color: var(--home-gold); }
+.structure-content { display: flex; min-width: 0; flex-direction: column; gap: 24px; }
+.structure-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid rgba(238,232,220,.18); border-bottom: 1px solid rgba(238,232,220,.18); }
+.structure-column { min-width: 0; padding: 22px clamp(16px, 2vw, 24px) 24px; border-right: 1px solid rgba(238,232,220,.14); }
+.structure-column:first-child { padding-left: 0; }
+.structure-column:last-child { padding-right: 0; border-right: 0; }
+.structure-column > header { display: flex; min-height: 56px; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.structure-column > header div { min-width: 0; }
+.structure-column > header span { color: var(--home-gold); font-family: 'Fraunces', serif; font-size: .72rem; font-style: italic; }
+.structure-column h3 { margin: 3px 0 0; font-family: 'Noto Serif SC', serif; font-size: 1rem; }
+.structure-column > header a { flex: none; color: #aebcb7; font-size: .64rem; font-weight: 700; }
+.structure-column > header a:hover { color: #eee8dc; background: linear-gradient(transparent 64%, rgba(232,173,66,.36) 64%); }
+.structure-column ul { display: flex; flex-direction: column; gap: 0; margin: 14px 0 0; padding: 0; list-style: none; }
+.structure-column li { border-top: 1px solid rgba(238,232,220,.1); }
+.structure-column li a { display: flex; min-height: 88px; flex-direction: column; justify-content: center; gap: 7px; padding: 14px 0; }
+.structure-column li a:hover strong { color: #efc46e; }
+.structure-column li span { color: #8ea099; font-size: .63rem; }
+.structure-column li strong { color: #eee8dc; font-family: 'Noto Serif SC', serif; font-size: .78rem; line-height: 1.55; transition: color .2s ease; }
+.structure-empty { margin: 18px 0 0; color: #8ea099; font-size: .72rem; }
 .repo-window { overflow: hidden; border-radius: 13px; box-shadow: 0 18px 56px rgba(0,0,0,.28); }
 .repo-titlebar { display: flex; align-items: center; gap: 18px; padding: 13px 16px; background: #31423d; color: #aebcb7; font-size: .72rem; }
 .repo-dots { display: flex; gap: 6px; }
@@ -261,8 +317,20 @@ const workflowRows = [
 .closing-copy h2 { margin: 18px 0 20px; font-size: clamp(2.4rem, 5.5vw, 5.2rem); letter-spacing: -.04em; }
 .closing-copy > p { max-width: 580px; margin: 0; color: var(--home-muted); line-height: 1.9; }
 .closing-mark { align-self: stretch; display: grid; place-items: center; min-width: 260px; color: rgba(251,246,238,.55); background: var(--home-blue); font-family: 'Fraunces', serif; font-size: clamp(12rem, 25vw, 24rem); font-style: italic; line-height: 1; }
+.about-section { padding-block: clamp(86px, 12vh, 150px); background: var(--home-paper); }
+.about-layout { display: grid; grid-template-columns: .42fr 1fr; gap: clamp(50px, 9vw, 130px); align-items: center; }
+.about-portrait { position: relative; width: min(100%, 360px); aspect-ratio: .88; justify-self: end; }
+.about-portrait > span { position: absolute; top: 12%; left: -18%; z-index: 2; color: var(--home-orange); font-family: 'Caveat', cursive; font-size: clamp(1.4rem, 3vw, 2.1rem); font-weight: 700; transform: rotate(-7deg); }
+.about-portrait > div { width: 100%; height: 100%; overflow: hidden; border-radius: 48% 48% 16px 16px; background: #e4ded3; box-shadow: 0 20px 52px rgba(49,95,86,.12); }
+.about-portrait img { width: 250%; height: 100%; max-width: none; object-fit: cover; object-position: 66% center; transform: translateX(-48%); }
+.about-copy { max-width: 720px; }
+.about-copy h2 { margin: 8px 0 20px; font-family: 'Noto Serif SC', serif; font-size: clamp(2.2rem, 5vw, 4.5rem); font-weight: 900; letter-spacing: -.04em; }
+.about-copy > p { max-width: 68ch; margin: 0; color: var(--home-muted); line-height: 1.95; }
+.about-copy .about-lead { margin-bottom: 16px; color: var(--home-ink); font-family: 'Noto Serif SC', serif; font-size: clamp(1.12rem, 2vw, 1.45rem); font-weight: 700; line-height: 1.75; }
+.about-tags { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 25px; }
+.about-tags span { padding: 7px 12px; border-radius: 999px; background: #e8eee9; color: var(--home-green); font-size: .7rem; font-weight: 700; }
 .helly-footer { display: flex; justify-content: space-between; gap: 30px; padding: 28px clamp(24px, 5vw, 72px); background: var(--home-dark); color: #eee8dc; font-size: .72rem; letter-spacing: .04em; }
-@media (max-width: 900px) { .helly-hero { grid-template-columns: 1fr; } .portrait-stage { order: -1; width: min(58vw, 290px); } .section-heading, .compact-heading { grid-template-columns: 56px 1fr; align-items: start; } .section-heading > p { grid-column: 1 / -1; justify-self: start; } .project-grid, .updates-grid { grid-template-columns: 1fr; } .project-card { min-height: 0; } .repo-layout, .workflow-layout { grid-template-columns: 1fr; } .workflow-side { position: static; } .repo-body a { grid-template-columns: 1fr; gap: 7px; } .closing-section { grid-template-columns: 1fr; } .closing-mark { min-height: 220px; } }
-@media (max-width: 600px) { .helly-hero-copy h1 { font-size: clamp(2.25rem, 11.5vw, 2.8rem); letter-spacing: -.04em; } .mobile-break { display: inline; } .helly-actions { align-items: stretch; flex-direction: column; } .orbit-one { right: 0; } .orbit-two { left: 0; } .orbit-three { right: -2%; } .section-heading { grid-template-columns: 1fr; } .method-flow { padding-left: 54px; } .method-dot { left: -54px; } .method-flow::before { left: 22px; } .method-quote p { padding-left: 0; } .workflow-head, .workflow-row { grid-template-columns: 48px 1fr; } .workflow-head span:last-child, .workflow-row p { grid-column: 2; } .closing-copy { padding-inline: 24px; } .helly-footer { flex-direction: column; } }
+@media (max-width: 900px) { .helly-hero { grid-template-columns: 1fr; } .portrait-stage { order: -1; width: min(58vw, 290px); } .section-heading, .compact-heading { grid-template-columns: 56px 1fr; align-items: start; } .section-heading > p { grid-column: 1 / -1; justify-self: start; } .project-grid, .updates-grid { grid-template-columns: 1fr; } .project-card { min-height: 0; } .repo-layout, .workflow-layout, .about-layout { grid-template-columns: 1fr; } .structure-grid { grid-template-columns: 1fr; } .structure-column, .structure-column:first-child, .structure-column:last-child { padding: 22px 0; border-right: 0; border-bottom: 1px solid rgba(238,232,220,.14); } .structure-column:last-child { border-bottom: 0; } .workflow-side { position: static; } .repo-body a { grid-template-columns: 1fr; gap: 7px; } .closing-section { grid-template-columns: 1fr; } .closing-mark { min-height: 220px; } .about-portrait { width: min(72vw, 330px); justify-self: center; } }
+@media (max-width: 600px) { .helly-hero-copy h1 { font-size: clamp(2.25rem, 11.5vw, 2.8rem); letter-spacing: -.04em; } .mobile-break { display: inline; } .helly-actions { align-items: stretch; flex-direction: column; } .orbit-one { right: 0; } .orbit-two { left: 0; } .orbit-three { right: -2%; } .section-heading { grid-template-columns: 1fr; } .method-flow { padding-left: 54px; } .method-dot { left: -54px; } .method-flow::before { left: 22px; } .method-quote p { padding-left: 0; } .workflow-head, .workflow-row { grid-template-columns: 48px 1fr; } .workflow-head span:last-child, .workflow-row p { grid-column: 2; } .closing-copy { padding-inline: 24px; } .about-portrait > span { left: -4%; } .helly-footer { flex-direction: column; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
 </style>

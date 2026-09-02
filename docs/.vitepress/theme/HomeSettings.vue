@@ -8,6 +8,7 @@ type HomeConfig = {
   portraitUrl: string; portraitAlt: string; portraitTags: string[]
   methodTitle: string; methodIntro: string; methodSteps: Step[]; coreQuote: string
   repositories: Repo[]; closingTitle: string; closingText: string
+  aboutTitle: string; aboutLead: string; aboutText: string
 }
 
 const config = ref<HomeConfig | null>(null)
@@ -53,6 +54,7 @@ onMounted(loadConfig)
       <section class="settings-card"><div class="card-title"><span>03</span><div><h3>我的工作逻辑</h3><p>保留三个步骤，形成清晰的工作方法。</p></div></div><div class="settings-grid"><label><span>区域标题</span><input v-model="config.methodTitle" required></label><label class="wide"><span>区域介绍</span><textarea v-model="config.methodIntro" rows="3" required></textarea></label></div><div class="step-editors"><div v-for="(step, index) in config.methodSteps" :key="index"><strong>步骤 {{ index + 1 }}</strong><label><span>步骤标题</span><input v-model="step.label" required></label><label><span>步骤说明</span><textarea v-model="step.description" rows="3" required></textarea></label></div></div><label class="block-field"><span>核心观点文字</span><textarea v-model="config.coreQuote" rows="4" required></textarea></label></section>
       <section class="settings-card"><div class="card-title"><span>04</span><div><h3>GitHub 仓库</h3><p>可增减仓库，每项包含名称、链接和一句说明。</p></div></div><div class="repo-editors"><div v-for="(repo, index) in config.repositories" :key="index"><div class="repo-editor-head"><strong>仓库 {{ index + 1 }}</strong><button type="button" :disabled="config.repositories.length === 1" @click="removeRepository(index)">移除</button></div><label><span>仓库名称</span><input v-model="repo.name" required></label><label><span>GitHub 链接</span><input v-model="repo.url" type="url" required></label><label><span>一句说明</span><input v-model="repo.description" required></label></div></div><button type="button" class="add-repo" @click="addRepository">＋ 添加仓库</button></section>
       <section class="settings-card"><div class="card-title"><span>05</span><div><h3>页面结尾</h3><p>最后一屏的主张与说明。</p></div></div><div class="settings-grid"><label class="wide"><span>结尾标题</span><input v-model="config.closingTitle" required></label><label class="wide"><span>结尾文案</span><textarea v-model="config.closingText" rows="4" required></textarea></label></div></section>
+      <section class="settings-card"><div class="card-title"><span>06</span><div><h3>我是谁</h3><p>首页末尾的个人介绍，形象图和关键词会沿用上方设置。</p></div></div><div class="settings-grid"><label class="wide"><span>区域标题</span><input v-model="config.aboutTitle" required></label><label class="wide"><span>一句话介绍</span><textarea v-model="config.aboutLead" rows="2" required></textarea></label><label class="wide"><span>详细介绍</span><textarea v-model="config.aboutText" rows="5" required></textarea></label></div></section>
       <div v-if="status" class="settings-status" :class="status.type">{{ status.message }}</div>
       <div class="settings-save"><div><strong>保存后自动更新首页</strong><span>原配置保存在 .content-backups 文件夹。</span></div><button type="submit" :disabled="saving">{{ saving ? '正在保存…' : '保存首页设置' }}</button></div>
     </form>

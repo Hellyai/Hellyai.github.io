@@ -281,7 +281,8 @@ async function saveHomeConfig(payload: Record<string, unknown>) {
     heroIntro: homeText(payload.heroIntro, 600, '首页介绍'), portraitUrl, portraitAlt: cleanText(payload.portraitAlt, 120) || 'HellyAI 个人形象', portraitTags,
     methodTitle: homeText(payload.methodTitle, 80, '工作逻辑标题'), methodIntro: homeText(payload.methodIntro, 400, '工作逻辑介绍'), methodSteps,
     coreQuote: homeText(payload.coreQuote, 400, '核心观点'), repositories,
-    closingTitle: homeText(payload.closingTitle, 120, '结尾标题'), closingText: homeText(payload.closingText, 400, '结尾文案')
+    closingTitle: homeText(payload.closingTitle, 120, '结尾标题'), closingText: homeText(payload.closingText, 400, '结尾文案'),
+    aboutTitle: homeText(payload.aboutTitle, 80, '“我是谁”标题'), aboutLead: homeText(payload.aboutLead, 240, '“我是谁”简介'), aboutText: homeText(payload.aboutText, 800, '“我是谁”详细介绍')
   }
   await writeFile(homeConfigFile, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
   return { config, backup: path.relative(projectRoot, backupDir).replace(/\\/g, '/') }
